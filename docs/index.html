@@ -1,0 +1,2317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KtAstBridge — Bidirectional Figma ↔ Jetpack Compose Studio</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #0b0f19;
+      color: #e2e8f0;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    .canvas-grid {
+      background-color: #111827;
+      background-image: radial-gradient(#334155 1px, transparent 1px);
+      background-size: 16px 16px;
+    }
+    .figma-selected-outline {
+      outline: 2px solid #0ea5e9 !important;
+      outline-offset: 1px;
+    }
+    .figma-guide-dashed {
+      outline: 1px dashed rgba(236, 72, 153, 0.55);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col overflow-x-hidden selection:bg-indigo-500 selection:text-white">
+
+  <!-- Top Header & Pipeline Control Bar -->
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-30 px-4 py-2.5">
+    <div class="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-3">
+      <!-- Brand & Engine Status -->
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 font-bold text-white text-sm mono">
+          AST
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-sm sm:text-base text-white tracking-tight">KtAstBridge Studio</h1>
+            <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+              Kotlin PSI / AST Bidirectional Compiler
+            </span>
+          </div>
+          <p class="text-xs text-slate-400 hidden sm:block">
+            Jetpack Compose <span class="mono text-indigo-400">@Composable</span> ↔ <span class="mono text-purple-400">KtFile AST</span> ↔ <span class="mono text-pink-400">Figma Auto Layout SceneGraph</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Preset Selector & Bidirectional Transform Controls -->
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700 rounded-lg px-2.5 py-1">
+          <label for="presetSelect" class="text-xs text-slate-400 font-medium">Preset:</label>
+          <select id="presetSelect" class="bg-transparent text-xs font-medium text-white focus:outline-none cursor-pointer pr-1">
+            <option value="fintech" class="bg-slate-900">1. Fintech Wallet Card</option>
+            <option value="ecommerce" class="bg-slate-900">2. E-Commerce Product Detail</option>
+            <option value="auth" class="bg-slate-900">3. Auth Login Screen</option>
+            <option value="profile" class="bg-slate-900">4. Creator Analytics Profile</option>
+          </select>
+        </div>
+
+        <button id="btnComposeToFigma" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+          <span>Compose → AST → Figma UI</span>
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+        </button>
+
+        <button id="btnFigmaToCompose" class="px-3 py-1.5 rounded-lg bg-pink-600 hover:bg-pink-500 active:bg-pink-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 17l-5-5m0 0l5-5m-5 5h12"/></svg>
+          <span>Figma UI → AST → Compose</span>
+        </button>
+
+        <button id="btnToggleAutoSync" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-emerald-300 flex items-center gap-1.5 transition" title="Automatically run AST compiler on edits">
+          <span id="autoSyncDot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span id="autoSyncLabel">Auto-Sync: ON</span>
+        </button>
+
+        <button id="btnOpenGuideModal" class="px-2.5 py-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-xs font-semibold text-indigo-200 flex items-center gap-1.5 transition">
+          <span>? How to Use</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Pipeline Metrics Telemetry Strip -->
+  <div class="bg-slate-950 border-b border-slate-800/80 px-4 py-1.5 text-xs">
+    <div class="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-2">
+      <div class="flex flex-wrap items-center gap-4 text-slate-400">
+        <span>Direction: <strong id="metricDirection" class="text-indigo-300 font-semibold">Compose (.kt) → AST → Figma SceneGraph</strong></span>
+        <span>Lexer Tokens: <strong id="metricTokenCount" class="text-white mono">0</strong></span>
+        <span>AST Nodes: <strong id="metricAstNodeCount" class="text-purple-300 mono">0</strong></span>
+        <span>Figma Layers: <strong id="metricFigmaLayerCount" class="text-pink-300 mono">0</strong></span>
+      </div>
+      <div id="pipelineStatusText" class="text-emerald-400 mono text-[11px] truncate">
+        ✓ AST parsed & Auto Layout bounds computed in 1.4ms
+      </div>
+    </div>
+  </div>
+
+  <!-- Main 3-Pane Responsive Workspace -->
+  <main class="flex-1 max-w-[1600px] w-full mx-auto p-3 grid grid-cols-1 lg:grid-cols-12 gap-3">
+
+    <!-- PANE 1 (LEFT - 4 cols): Jetpack Compose Kotlin Source Editor -->
+    <section class="lg:col-span-4 bg-slate-900 border border-slate-800 rounded-xl flex flex-col overflow-hidden shadow-lg">
+      <div class="px-3.5 py-2.5 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-indigo-400"></span>
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-200">1. Jetpack Compose Code (.kt)</h2>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button id="btnFormatKotlin" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium transition">
+            Format AST
+          </button>
+          <button id="btnCopyKotlin" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium transition">
+            Copy .kt
+          </button>
+        </div>
+      </div>
+
+      <!-- Editor Area -->
+      <div class="relative flex-1 flex flex-col min-h-[380px]">
+        <textarea id="kotlinCodeEditor" spellcheck="false" class="w-full flex-1 bg-slate-950 text-slate-100 mono text-xs leading-relaxed p-3.5 focus:outline-none resize-none border-b border-slate-800" placeholder="Write @Composable Kotlin code here..."></textarea>
+
+        <!-- Kotlin AST Parser Diagnostics Footer -->
+        <div id="kotlinStatusBanner" class="px-3.5 py-2 bg-slate-900/95 text-[11px] flex items-center justify-between gap-2">
+          <span id="kotlinDiagnosticMsg" class="text-emerald-400 truncate">✓ Valid @Composable KtNamedFunction AST</span>
+          <span id="kotlinLineCount" class="text-slate-400 mono shrink-0">32 lines</span>
+        </div>
+      </div>
+
+      <!-- Quick Composable Snippet Inserters -->
+      <div class="px-3.5 py-2 bg-slate-900 border-t border-slate-800 flex flex-wrap items-center gap-1.5">
+        <span class="text-[11px] text-slate-400 mr-1">Insert AST Call:</span>
+        <button id="btnInsertText" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-indigo-600/40 border border-slate-700 text-[11px] mono text-indigo-300 transition">+Text()</button>
+        <button id="btnInsertButton" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-indigo-600/40 border border-slate-700 text-[11px] mono text-indigo-300 transition">+Button()</button>
+        <button id="btnInsertRow" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-indigo-600/40 border border-slate-700 text-[11px] mono text-indigo-300 transition">+Row()</button>
+        <button id="btnInsertDivider" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-indigo-600/40 border border-slate-700 text-[11px] mono text-indigo-300 transition">+Divider()</button>
+      </div>
+    </section>
+
+    <!-- PANE 2 (CENTER - 4 cols): Kotlin AST Tree, Lexer Tokens, Figma JSON & JVM Code -->
+    <section class="lg:col-span-4 bg-slate-900 border border-slate-800 rounded-xl flex flex-col overflow-hidden shadow-lg">
+      <!-- Center Tabs -->
+      <div class="px-2 pt-2 border-b border-slate-800 bg-slate-900/80 flex items-center gap-1 overflow-x-auto">
+        <button id="tabBtnAst" class="px-3 py-1.5 rounded-t-lg text-xs font-semibold bg-slate-800 text-purple-300 border-t border-x border-slate-700 whitespace-nowrap">
+          Kotlin AST Tree
+        </button>
+        <button id="tabBtnFigmaJson" class="px-3 py-1.5 rounded-t-lg text-xs font-medium text-slate-400 hover:text-slate-200 whitespace-nowrap">
+          Figma SceneNode JSON
+        </button>
+        <button id="tabBtnTokens" class="px-3 py-1.5 rounded-t-lg text-xs font-medium text-slate-400 hover:text-slate-200 whitespace-nowrap">
+          Lexer Tokens
+        </button>
+        <button id="tabBtnJvmSource" class="px-3 py-1.5 rounded-t-lg text-xs font-medium text-slate-400 hover:text-slate-200 whitespace-nowrap">
+          JVM Engine (.kt)
+        </button>
+      </div>
+
+      <!-- TAB 1: Interactive Kotlin AST Explorer -->
+      <div id="panelAst" class="flex-1 flex flex-col min-h-[420px] overflow-hidden">
+        <div class="px-3.5 py-2 bg-slate-950/60 border-b border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+          <span>Click any <span class="mono text-purple-300">KtElement</span> node to inspect PSI properties & Modifier chain</span>
+          <button id="btnExpandAllAst" class="text-indigo-400 hover:underline">Reset Selection</button>
+        </div>
+
+        <div id="astTreeContainer" class="flex-1 overflow-y-auto p-3 space-y-1.5 bg-slate-950 mono text-xs max-h-[300px]"></div>
+
+        <!-- Selected AST Node Detail Card -->
+        <div class="p-3 bg-slate-900 border-t border-slate-800">
+          <div class="text-[11px] font-semibold uppercase tracking-wider text-purple-300 mb-1.5 flex items-center justify-between">
+            <span id="astDetailTitle">AST Node Inspector (KtCallExpression)</span>
+            <span id="astDetailBadge" class="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 mono text-[10px]">PSI</span>
+          </div>
+          <div id="astDetailBody" class="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs mono text-slate-300 space-y-1 max-h-[140px] overflow-y-auto">
+            Select a node in the Kotlin AST tree or Figma canvas to inspect its parsed arguments and unrolled Modifier chain.
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: Editable Figma REST / Plugin API JSON -->
+      <div id="panelFigmaJson" class="hidden flex-1 flex flex-col min-h-[420px]">
+        <div class="px-3.5 py-2 bg-slate-950/60 border-b border-slate-800 flex items-center justify-between gap-2">
+          <span class="text-[11px] text-slate-400">Edit Figma <span class="mono text-pink-300">FRAME / TEXT</span> JSON & compile to Kotlin</span>
+          <div class="flex items-center gap-1.5">
+            <button id="btnApplyFigmaJson" class="px-2.5 py-1 rounded bg-pink-600 hover:bg-pink-500 text-white text-[11px] font-semibold transition">
+              JSON → AST → Kotlin
+            </button>
+            <button id="btnCopyFigmaJson" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] transition">
+              Copy JSON
+            </button>
+          </div>
+        </div>
+        <textarea id="figmaJsonEditor" spellcheck="false" class="w-full flex-1 bg-slate-950 text-pink-100 mono text-xs leading-relaxed p-3.5 focus:outline-none resize-none"></textarea>
+      </div>
+
+      <!-- TAB 3: Lexer Token Stream -->
+      <div id="panelTokens" class="hidden flex-1 flex flex-col min-h-[420px]">
+        <div class="px-3.5 py-2 bg-slate-950/60 border-b border-slate-800 flex items-center justify-between gap-2">
+          <span class="text-[11px] text-slate-400">KotlinLexer Token Stream</span>
+          <input id="tokenSearchInput" type="text" placeholder="Filter tokens..." class="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-white focus:outline-none">
+        </div>
+        <div id="tokenListContainer" class="flex-1 overflow-y-auto p-3 bg-slate-950 mono text-xs space-y-1 max-h-[420px]"></div>
+      </div>
+
+      <!-- TAB 4: Standalone Kotlin JVM Architecture Reference -->
+      <div id="panelJvmSource" class="hidden flex-1 flex flex-col min-h-[420px]">
+        <div class="px-3.5 py-2 bg-slate-950/60 border-b border-slate-800 flex items-center justify-between gap-2">
+          <select id="jvmFileSelect" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white mono focus:outline-none">
+            <option value="parser">KotlinComposeAstParser.kt (Lexer + Recursive-Descent AST)</option>
+            <option value="ast2figma">AstToFigmaTransformer.kt (KtCallExpr → Figma Auto Layout)</option>
+            <option value="figma2ast">FigmaToAstTransformer.kt (Figma Node → KtFile AST)</option>
+            <option value="gradle">build.gradle.kts (kotlin-compiler-embeddable + KotlinPoet)</option>
+          </select>
+          <button id="btnCopyJvmFile" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-medium transition">
+            Copy File
+          </button>
+        </div>
+        <pre id="jvmSourceCodeView" class="flex-1 overflow-auto p-3.5 bg-slate-950 text-indigo-100 mono text-[11px] leading-relaxed max-h-[420px]"></pre>
+      </div>
+    </section>
+
+    <!-- PANE 3 (RIGHT - 4 cols): Interactive Figma Visual Canvas & Live Node Property Inspector -->
+    <section class="lg:col-span-4 bg-slate-900 border border-slate-800 rounded-xl flex flex-col overflow-hidden shadow-lg">
+      <div class="px-3.5 py-2.5 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-pink-400"></span>
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-200">3. Figma Auto Layout UI & Inspector</h2>
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5">
+          <select id="deviceSizeSelect" class="bg-slate-800 border border-slate-700 rounded px-1.5 py-1 text-[11px] text-slate-200 focus:outline-none" title="WindowSizeClass Viewport">
+            <option value="340">Compact (340dp)</option>
+            <option value="440">Medium (440dp)</option>
+            <option value="560">Expanded (560dp)</option>
+          </select>
+          <button id="btnRotateScreen" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-indigo-300 text-[11px] font-medium transition" title="Toggle Portrait / Landscape Orientation">
+            ↻ Portrait
+          </button>
+          <button id="btnToggleLayoutGuides" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-pink-300 text-[11px] font-medium transition">
+            Guides: ON
+          </button>
+        </div>
+      </div>
+
+      <!-- Visual Add-Layer Bar (Modify Figma UI visually -> Generate Kotlin via AST) -->
+      <div class="px-3.5 py-2 bg-slate-950/70 border-b border-slate-800 flex flex-wrap items-center justify-between gap-1.5">
+        <span class="text-[11px] text-slate-400">Add Figma Node:</span>
+        <div class="flex items-center gap-1.5">
+          <button id="btnAddFigmaText" class="px-2 py-0.5 rounded bg-pink-500/15 hover:bg-pink-500/30 border border-pink-500/30 text-pink-200 text-[11px] font-medium transition">
+            + Text Layer
+          </button>
+          <button id="btnAddFigmaButton" class="px-2 py-0.5 rounded bg-pink-500/15 hover:bg-pink-500/30 border border-pink-500/30 text-pink-200 text-[11px] font-medium transition">
+            + Button Frame
+          </button>
+          <button id="btnAddFigmaRowCard" class="px-2 py-0.5 rounded bg-pink-500/15 hover:bg-pink-500/30 border border-pink-500/30 text-pink-200 text-[11px] font-medium transition">
+            + Row Frame
+          </button>
+        </div>
+      </div>
+
+      <!-- Interactive Rendered Figma Viewport -->
+      <div class="canvas-grid flex-1 p-4 flex flex-col items-center justify-start overflow-y-auto min-h-[290px] max-h-[340px]">
+        <!-- Simulated Device / Frame Header -->
+        <div class="w-full max-w-[340px] mb-1.5 flex items-center justify-between text-[11px] mono text-slate-400">
+          <span id="figmaRootFrameLabel">FRAME: PaymentCardScreen</span>
+          <span id="figmaRootDimensions">340 × auto</span>
+        </div>
+
+        <!-- Live Rendered SceneGraph Mount -->
+        <div id="figmaVisualCanvas" class="w-full max-w-[340px] rounded-xl shadow-2xl transition-all duration-150 overflow-hidden bg-slate-100 text-slate-900"></div>
+      </div>
+
+      <!-- Live Figma Node Property Inspector (Edits Figma SceneGraph & Compiles back to Kotlin AST) -->
+      <div class="p-3 bg-slate-900 border-t border-slate-800 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold text-white">Figma Layer Inspector</span>
+            <span id="inspectorNodeBadge" class="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 mono text-[10px]">FRAME (1:1)</span>
+          </div>
+          <button id="btnDeleteFigmaNode" class="px-2 py-0.5 rounded bg-rose-500/15 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-[11px] transition">
+            Delete Layer
+          </button>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+          <!-- Text / Label Content -->
+          <div class="col-span-2 sm:col-span-2">
+            <label for="inspTextInput" class="block text-[10px] uppercase text-slate-400 mb-0.5">Text / Node Name</label>
+            <input id="inspTextInput" type="text" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:border-pink-500 focus:outline-none">
+          </div>
+
+          <!-- Layout Mode -->
+          <div>
+            <label for="inspLayoutMode" class="block text-[10px] uppercase text-slate-400 mb-0.5">Auto Layout</label>
+            <select id="inspLayoutMode" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:border-pink-500 focus:outline-none">
+              <option value="VERTICAL">VERTICAL (Column)</option>
+              <option value="HORIZONTAL">HORIZONTAL (Row)</option>
+              <option value="NONE">NONE (Box/Leaf)</option>
+            </select>
+          </div>
+
+          <!-- Color Hex -->
+          <div>
+            <label for="inspColorInput" class="block text-[10px] uppercase text-slate-400 mb-0.5">Fill / Text Color</label>
+            <div class="flex items-center gap-1">
+              <input id="inspColorPicker" type="color" value="#4f46e5" class="w-6 h-6 rounded bg-transparent border-0 cursor-pointer shrink-0">
+              <input id="inspColorInput" type="text" class="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-1 text-xs mono text-white focus:outline-none">
+            </div>
+          </div>
+
+          <!-- Padding (dp) -->
+          <div>
+            <label for="inspPaddingInput" class="block text-[10px] uppercase text-slate-400 mb-0.5">Padding (dp)</label>
+            <input id="inspPaddingInput" type="number" min="0" max="64" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs mono text-white focus:outline-none">
+          </div>
+
+          <!-- Spacing / FontSize -->
+          <div>
+            <label id="inspMetricLabel" for="inspMetricInput" class="block text-[10px] uppercase text-slate-400 mb-0.5">Spacing / Font (sp)</label>
+            <input id="inspMetricInput" type="number" min="0" max="72" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs mono text-white focus:outline-none">
+          </div>
+
+          <!-- Corner Radius -->
+          <div>
+            <label for="inspRadiusInput" class="block text-[10px] uppercase text-slate-400 mb-0.5">Corner Radius (dp)</label>
+            <input id="inspRadiusInput" type="number" min="0" max="48" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs mono text-white focus:outline-none">
+          </div>
+
+          <!-- Font Weight -->
+          <div>
+            <label for="inspWeightSelect" class="block text-[10px] uppercase text-slate-400 mb-0.5">Font Weight</label>
+            <select id="inspWeightSelect" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none">
+              <option value="400">Regular (400)</option>
+              <option value="500">Medium (500)</option>
+              <option value="600">SemiBold (600)</option>
+              <option value="700">Bold (700)</option>
+            </select>
+          </div>
+
+          <!-- Rotation (deg) -->
+          <div>
+            <label for="inspRotationInput" class="block text-[10px] uppercase text-slate-400 mb-0.5">Rotation (deg)</label>
+            <input id="inspRotationInput" type="number" min="-180" max="180" value="0" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs mono text-white focus:outline-none">
+          </div>
+
+          <!-- Scroll / Overflow Direction -->
+          <div>
+            <label for="inspScrollSelect" class="block text-[10px] uppercase text-slate-400 mb-0.5">Scroll Behavior</label>
+            <select id="inspScrollSelect" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none">
+              <option value="NONE">None (Static)</option>
+              <option value="VERTICAL_SCROLLING">verticalScroll()</option>
+              <option value="HORIZONTAL_SCROLLING">horizontalScroll()</option>
+            </select>
+          </div>
+
+          <!-- Apply & Emit Button -->
+          <div class="flex items-end col-span-2 sm:col-span-1">
+            <button id="btnApplyInspector" class="w-full py-1 px-2 rounded bg-pink-600 hover:bg-pink-500 text-white text-xs font-semibold transition">
+              Sync → Kotlin AST
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Interactive User Guide & Onboarding Modal -->
+  <div id="guideModalBackdrop" class="fixed inset-0 z-40 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-5 shadow-2xl space-y-4 max-h-[88vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div>
+          <h3 class="text-base font-bold text-white">How to Use KtAstBridge Studio</h3>
+          <p class="text-xs text-slate-400">Bidirectional Figma Auto Layout ↔ Kotlin AST ↔ Jetpack Compose Compiler</p>
+        </div>
+        <button id="btnCloseGuideModal" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold">
+          Close ✕
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+        <div class="p-3 rounded-xl bg-slate-950 border border-indigo-500/30 space-y-1.5">
+          <div class="font-bold text-indigo-300">1. Compose (.kt) → Figma UI</div>
+          <p class="text-slate-300 leading-relaxed">
+            Paste or type any <span class="mono text-indigo-200">@Composable</span> function in the left editor (or pick a preset). The lexer & AST parser unroll <span class="mono">Modifier</span> chains and render the live Figma Auto Layout frame on the right.
+          </p>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-950 border border-pink-500/30 space-y-1.5">
+          <div class="font-bold text-pink-300">2. Figma UI → Compose (.kt)</div>
+          <p class="text-slate-300 leading-relaxed">
+            Click any layer on the Figma canvas (right pane) to edit its text, Auto Layout mode, color, padding, rotation, or scroll behavior—or paste Figma JSON in the center tab—and click <span class="mono text-pink-200">Sync → Kotlin AST</span>.
+          </p>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-950 border border-purple-500/30 space-y-1.5">
+          <div class="font-bold text-purple-300">3. Inspect AST & Screen Sizes</div>
+          <p class="text-slate-300 leading-relaxed">
+            Click nodes in the center <span class="mono text-purple-200">Kotlin AST Tree</span> to inspect <span class="mono">KtCallExpression</span> arguments, or test <span class="mono">Compact / Medium / Expanded</span> widths and Portrait/Landscape rotation.
+          </p>
+        </div>
+      </div>
+
+      <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2 text-xs">
+        <div class="font-semibold text-emerald-300">Quick Try Actions</div>
+        <div class="flex flex-wrap gap-2">
+          <button id="btnGuideDemoRotate" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition">
+            Demo: Rotate Selected Layer 6°
+          </button>
+          <button id="btnGuideDemoScroll" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition">
+            Demo: Enable verticalScroll()
+          </button>
+          <button id="btnGuideDemoExpanded" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition">
+            Demo: Switch to Expanded (560dp)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toastBanner" class="fixed bottom-4 right-4 z-50 hidden px-4 py-2.5 rounded-lg bg-slate-800 border border-indigo-500/40 text-xs font-medium text-white shadow-xl"></div>
+
+  <script>
+    /**************************************************************************
+     * 1. PRESET COMPOSABLE SCREENS
+     **************************************************************************/
+    const PRESETS = {
+      fintech: `package com.example.fintech
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+@Composable
+fun PaymentCardScreen() {
+    Column(
+        modifier = Modifier.fillMaxWidth().background(Color(0xFFF8FAFC), RoundedCornerShape(16.dp)).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "MULTI-CURRENCY WALLET",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF4F46E5)
+            )
+            Text(
+                text = "ACTIVE • USD",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF059669)
+            )
+        }
+        Text(
+            text = "$24,850.00",
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF0F172A)
+        )
+        Text(
+            text = "+$1,420.50 (6.1%) this month",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color(0xFF475569)
+        )
+        Column(
+            modifier = Modifier.fillMaxWidth().background(Color(0xFFFFFFFF), RoundedCornerShape(12.dp)).border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp)).padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = "Recent Wire • Stripe Payout",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF1E293B)
+            )
+            Text(
+                text = "Settled today at 14:32 IST • Ref #AST-904",
+                fontSize = 12.sp,
+                color = Color(0xFF64748B)
+            )
+        }
+        Button(
+            modifier = Modifier.fillMaxWidth().background(Color(0xFF4F46E5), RoundedCornerShape(24.dp)).padding(12.dp)
+        ) {
+            Text(
+                text = "Send Instant Transfer",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFFFFFFFF)
+            )
+        }
+    }
+}`,
+      ecommerce: `package com.example.shop
+
+import androidx.compose.runtime.Composable
+
+@Composable
+fun ProductDetailCard() {
+    Column(
+        modifier = Modifier.fillMaxWidth().background(Color(0xFFFFFFFF), RoundedCornerShape(16.dp)).padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier.fillMaxWidth().background(Color(0xFFEEF2FF), RoundedCornerShape(12.dp)).padding(16.dp)
+        ) {
+            Text(
+                text = "LIMITED EDITION • AST STUDIO PRO",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF4338CA)
+            )
+        }
+        Text(
+            text = "Keychron Q1 Pro Wireless Mechanical Keyboard",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF0F172A)
+        )
+        Text(
+            text = "CNC machined aluminum body, QMK/VIA custom keymap support, and hot-swappable tactile switches.",
+            fontSize = 13.sp,
+            color = Color(0xFF475569)
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "$199.00",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0F172A)
+            )
+            Text(
+                text = "★ 4.9 (428 reviews)",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFFD97706)
+            )
+        }
+        HorizontalDivider(color = Color(0xFFE2E8F0))
+        Button(
+            modifier = Modifier.fillMaxWidth().background(Color(0xFF0F172A), RoundedCornerShape(12.dp)).padding(14.dp)
+        ) {
+            Text(
+                text = "Add to Bag — Ships Free",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFFFFFFFF)
+            )
+        }
+    }
+}`,
+      auth: `package com.example.auth
+
+import androidx.compose.runtime.Composable
+
+@Composable
+fun DeveloperLoginScreen() {
+    Column(
+        modifier = Modifier.fillMaxWidth().background(Color(0xFFFFFFFF), RoundedCornerShape(16.dp)).padding(22.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Text(
+            text = "Sign in to Cloud Console",
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF0F172A)
+        )
+        Text(
+            text = "Sync your Figma design tokens with Jetpack Compose repositories.",
+            fontSize = 13.sp,
+            color = Color(0xFF64748B)
+        )
+        Column(
+            modifier = Modifier.fillMaxWidth().background(Color(0xFFF8FAFC), RoundedCornerShape(10.dp)).border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(10.dp)).padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "WORK EMAIL",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF64748B)
+            )
+            Text(
+                text = "alex.rivera@kotlinlang.org",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF0F172A)
+            )
+        }
+        Column(
+            modifier = Modifier.fillMaxWidth().background(Color(0xFFF8FAFC), RoundedCornerShape(10.dp)).border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(10.dp)).padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "PASSPHRASE",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF64748B)
+            )
+            Text(
+                text = "••••••••••••••••",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0F172A)
+            )
+        }
+        Button(
+            modifier = Modifier.fillMaxWidth().background(Color(0xFF2563EB), RoundedCornerShape(10.dp)).padding(13.dp)
+        ) {
+            Text(
+                text = "Continue with SSO",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFFFFFFFF)
+            )
+        }
+    }
+}`,
+      profile: `package com.example.profile
+
+import androidx.compose.runtime.Composable
+
+@Composable
+fun CreatorProfileCard() {
+    Column(
+        modifier = Modifier.fillMaxWidth().background(Color(0xFFFFFFFF), RoundedCornerShape(16.dp)).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Text(
+            text = "Priya Sharma • Staff Android Architect",
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF0F172A)
+        )
+        Text(
+            text = "Building compiler plugins, Kotlin PSI analyzers, and Compose design systems.",
+            fontSize = 13.sp,
+            color = Color(0xFF475569)
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().background(Color(0xFFF1F5F9), RoundedCornerShape(12.dp)).padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(text = "142", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                Text(text = "Components", fontSize = 11.sp, color = Color(0xFF64748B))
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(text = "99.4%", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4F46E5))
+                Text(text = "AST Fidelity", fontSize = 11.sp, color = Color(0xFF64748B))
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(text = "12.8k", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF059669))
+                Text(text = "GitHub Stars", fontSize = 11.sp, color = Color(0xFF64748B))
+            }
+        }
+        Button(
+            modifier = Modifier.fillMaxWidth().background(Color(0xFF0F172A), RoundedCornerShape(20.dp)).padding(12.dp)
+        ) {
+            Text(
+                text = "Sync Design System Tokens",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFFFFFFFF)
+            )
+        }
+    }
+}`
+    };
+
+    /**************************************************************************
+     * 2. STANDALONE KOTLIN JVM ENGINE REFERENCE FILES (FOR TAB 4)
+     **************************************************************************/
+    const JVM_FILES = {
+      parser: `package com.figmacompose.ast.parser
+
+// Lexer & Recursive-Descent AST Parser + JetBrains Kotlin Compiler PSI Bridge
+// Parses @Composable functions into KtFileNode -> KtFunctionDeclNode -> KtCallExprNode
+class KotlinComposeAstParser(private val tokens: List<Token>) {
+    companion object {
+        fun parseSource(source: String): KtFileNode {
+            val tokens = KotlinLexer(source).tokenize()
+            return KotlinComposeAstParser(tokens).parseFile()
+        }
+    }
+
+    fun parseFile(): KtFileNode {
+        var packageName = "com.example.ui"
+        val imports = mutableListOf<String>()
+        val functions = mutableListOf<KtFunctionDeclNode>()
+        while (!isAtEnd()) {
+            when {
+                checkKeyword("package") -> { advance(); packageName = parseQualifiedIdentifier() }
+                checkKeyword("import") -> { advance(); imports.add(parseQualifiedIdentifier()) }
+                check(TokenType.AT_ANNOTATION) || checkKeyword("fun") -> functions.add(parseFunctionDeclaration())
+                else -> advance()
+            }
+        }
+        return KtFileNode(packageName, imports, functions)
+    }
+    // Unrolls KtDotQualifiedExprNode chains (e.g. Modifier.fillMaxWidth().padding(16.dp))
+    // and trailing KtLambdaExprNode blocks ({ Text(...); Button(...) })
+}`,
+      ast2figma: `package com.figmacompose.ast.transformer
+
+// Walks KtFileNode AST -> Unrolls Modifier chains -> Emits Figma SceneGraph with Auto Layout
+class AstToFigmaTransformer {
+    fun transformFileToFigma(file: KtFileNode): FigmaNode {
+        val primaryComposable = file.declarations.first()
+        val rootIr = callToIr(primaryComposable.bodyStatements.first())
+        val rawFigmaNode = irToFigmaNode(rootIr)
+        return computeAutoLayoutBounds(rawFigmaNode, startX = 0.0, startY = 0.0, parentWidth = 340.0)
+    }
+    // Maps:
+    // Column -> FRAME (layoutMode = "VERTICAL")
+    // Row    -> FRAME (layoutMode = "HORIZONTAL")
+    // Box    -> FRAME (layoutMode = "NONE")
+    // Text   -> TEXT  (characters, style = FigmaTypeStyle, fills)
+    // Button -> FRAME (layoutMode = "HORIZONTAL", primaryAxisAlignItems = "CENTER", cornerRadius)
+}`,
+      figma2ast: `package com.figmacompose.ast.transformer
+
+// Traverses Figma SceneGraph JSON -> Synthesizes KtFileNode AST -> Emits Jetpack Compose Code
+class FigmaToAstTransformer {
+    fun transformFigmaToAst(rootNode: FigmaNode, composableName: String): KtFileNode {
+        val rootCall = figmaNodeToCallAst(rootNode)
+        return KtFileNode(
+            packageName = "com.example.generated",
+            declarations = listOf(
+                KtFunctionDeclNode(
+                    name = composableName,
+                    annotations = listOf(KtAnnotationNode("Composable")),
+                    bodyStatements = listOf(rootCall)
+                )
+            )
+        )
+    }
+}`,
+      gradle: `plugins {
+    kotlin("jvm") version "2.0.20"
+    kotlin("plugin.serialization") version "2.0.20"
+    application
+}
+
+dependencies {
+    // Official JetBrains Kotlin Embeddable Compiler for PSI / AST (KtFile, KtCallExpression)
+    implementation("org.jetbrains.kotlin:kotlin-compiler-embeddable:2.0.20")
+    // Square KotlinPoet for structured .kt source emission
+    implementation("com.squareup:kotlinpoet:1.18.1")
+    // Kotlinx Serialization for Figma REST & Plugin API JSON
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+}`
+    };
+
+    /**************************************************************************
+     * 3. KOTLIN LEXER & RECURSIVE-DESCENT AST PARSER (IN-BROWSER ENGINE)
+     **************************************************************************/
+    const KEYWORDS = new Set(["package", "import", "fun", "val", "var", "true", "false", "null"]);
+
+    function tokenizeKotlin(source) {
+      const tokens = [];
+      let pos = 0, line = 1, col = 1;
+      const peek = (off = 1) => (pos + off < source.length ? source[pos + off] : "");
+
+      while (pos < source.length) {
+        const ch = source[pos];
+        if (ch === "\n") {
+          pos++; line++; col = 1;
+        } else if (/\s/.test(ch)) {
+          pos++; col++;
+        } else if (ch === "/" && peek(1) === "/") {
+          while (pos < source.length && source[pos] !== "\n") { pos++; col++; }
+        } else if (ch === "/" && peek(1) === "*") {
+          pos += 2; col += 2;
+          while (pos < source.length && !(source[pos] === "*" && peek(1) === "/")) {
+            if (source[pos] === "\n") { line++; col = 1; } else col++;
+            pos++;
+          }
+          if (pos < source.length) { pos += 2; col += 2; }
+        } else if (ch === "@") {
+          const startCol = col;
+          pos++; col++;
+          let name = "";
+          while (pos < source.length && /[a-zA-Z0-9_]/.test(source[pos])) {
+            name += source[pos++]; col++;
+          }
+          tokens.push({ type: "AT_ANNOTATION", lexeme: name, line, col: startCol });
+        } else if (ch === '"') {
+          const startCol = col;
+          pos++; col++;
+          let str = "";
+          while (pos < source.length && source[pos] !== '"') {
+            if (source[pos] === "\\" && pos + 1 < source.length) { pos++; col++; }
+            str += source[pos++]; col++;
+          }
+          if (pos < source.length) { pos++; col++; }
+          tokens.push({ type: "STRING", lexeme: str, line, col: startCol });
+        } else if (/[0-9]/.test(ch) || (ch === "-" && /[0-9]/.test(peek(1)))) {
+          const startCol = col;
+          let numStr = "";
+          if (ch === "-") { numStr += source[pos++]; col++; }
+          if (source[pos] === "0" && (peek(1) === "x" || peek(1) === "X")) {
+            numStr += "0x"; pos += 2; col += 2;
+            while (pos < source.length && /[0-9a-fA-F_]/.test(source[pos])) {
+              if (source[pos] !== "_") numStr += source[pos];
+              pos++; col++;
+            }
+          } else {
+            while (pos < source.length && /[0-9.]/.test(source[pos])) {
+              if (source[pos] === "." && !/[0-9]/.test(peek(1))) break;
+              numStr += source[pos++]; col++;
+            }
+            if (pos < source.length && (source[pos] === "f" || source[pos] === "F")) {
+              pos++; col++;
+            }
+          }
+          tokens.push({ type: "NUMBER", lexeme: numStr, line, col: startCol });
+        } else if (/[a-zA-Z_]/.test(ch)) {
+          const startCol = col;
+          let ident = "";
+          while (pos < source.length && /[a-zA-Z0-9_]/.test(source[pos])) {
+            ident += source[pos++]; col++;
+          }
+          tokens.push({
+            type: KEYWORDS.has(ident) ? "KEYWORD" : "IDENTIFIER",
+            lexeme: ident,
+            line,
+            col: startCol
+          });
+        } else if (ch === "-" && peek(1) === ">") {
+          tokens.push({ type: "ARROW", lexeme: "->", line, col });
+          pos += 2; col += 2;
+        } else {
+          const map = {
+            "(": "LPAREN", ")": "RPAREN", "{": "LBRACE", "}": "RBRACE",
+            ",": "COMMA", ".": "DOT", ":": "COLON", "=": "EQUALS"
+          };
+          if (map[ch]) {
+            tokens.push({ type: map[ch], lexeme: ch, line, col });
+          }
+          pos++; col++;
+        }
+      }
+      tokens.push({ type: "EOF", lexeme: "", line, col });
+      return tokens;
+    }
+
+    function parseKotlinAst(tokens) {
+      let idx = 0;
+      let astIdSeq = 1;
+      const nextAstId = () => "ast-" + (astIdSeq++);
+
+      const isAtEnd = () => tokens[idx].type === "EOF";
+      const check = (type) => !isAtEnd() && tokens[idx].type === type;
+      const checkKw = (word) => !isAtEnd() && tokens[idx].type === "KEYWORD" && tokens[idx].lexeme === word;
+      const advance = () => (!isAtEnd() ? tokens[idx++] : tokens[tokens.length - 1]);
+      const peekTok = (off = 1) => (idx + off < tokens.length ? tokens[idx + off] : tokens[tokens.length - 1]);
+      const match = (type) => { if (check(type)) { advance(); return true; } return false; };
+
+      function parseQualifiedIdent() {
+        let out = "";
+        while (check("IDENTIFIER") || check("DOT") || ( !isAtEnd() && tokens[idx].lexeme === "*" )) {
+          out += advance().lexeme;
+        }
+        return out || "com.example.ui";
+      }
+
+      function parseValueArgList() {
+        const args = [];
+        while (!check("RPAREN") && !isAtEnd()) {
+          const isNamed = check("IDENTIFIER") && peekTok(1).type === "EQUALS";
+          if (isNamed) {
+            const name = advance().lexeme;
+            match("EQUALS");
+            const expr = parseExpression();
+            args.push({ astId: nextAstId(), nodeType: "KtValueArgument", name, expression: expr });
+          } else {
+            const expr = parseExpression();
+            args.push({ astId: nextAstId(), nodeType: "KtValueArgument", name: null, expression: expr });
+          }
+          if (!match("COMMA")) break;
+        }
+        match("RPAREN");
+        return args;
+      }
+
+      function parseLambda() {
+        const line = tokens[idx].line;
+        match("LBRACE");
+        const statements = [];
+        while (!check("RBRACE") && !isAtEnd()) {
+          const expr = parseExpression();
+          if (expr && expr.nodeType === "KtCallExpression") {
+            statements.push(expr);
+          }
+        }
+        match("RBRACE");
+        return { astId: nextAstId(), nodeType: "KtLambdaExpression", line, statements };
+      }
+
+      function parsePrimary() {
+        const tok = tokens[idx];
+        if (check("STRING")) {
+          return { astId: nextAstId(), nodeType: "KtStringTemplateExpression", value: advance().lexeme, line: tok.line };
+        }
+        if (check("NUMBER")) {
+          const raw = advance().lexeme;
+          const isHex = /^0x/i.test(raw);
+          const numVal = isHex ? parseInt(raw, 16) : parseFloat(raw);
+          return { astId: nextAstId(), nodeType: "KtConstantExpression", raw, value: numVal, isHex, line: tok.line };
+        }
+        if (checkKw("true") || checkKw("false")) {
+          return { astId: nextAstId(), nodeType: "KtConstantExpression", value: advance().lexeme === "true", line: tok.line };
+        }
+        if (check("LBRACE")) {
+          return parseLambda();
+        }
+        if (check("IDENTIFIER")) {
+          const ident = advance().lexeme;
+          const hasParen = check("LPAREN");
+          const valueArguments = match("LPAREN") ? parseValueArgList() : [];
+          const trailingLambda = check("LBRACE") ? parseLambda() : null;
+          if (hasParen || trailingLambda) {
+            return {
+              astId: nextAstId(),
+              nodeType: "KtCallExpression",
+              calleeName: ident,
+              valueArguments,
+              trailingLambda,
+              line: tok.line
+            };
+          }
+          return { astId: nextAstId(), nodeType: "KtNameReferenceExpression", identifier: ident, line: tok.line };
+        }
+        const fallback = advance();
+        return { astId: nextAstId(), nodeType: "KtNameReferenceExpression", identifier: fallback.lexeme, line: fallback.line };
+      }
+
+      function parseExpression() {
+        let expr = parsePrimary();
+        while (match("DOT")) {
+          const selector = parsePrimary();
+          expr = {
+            astId: nextAstId(),
+            nodeType: "KtDotQualifiedExpression",
+            receiver: expr,
+            selector,
+            line: expr.line
+          };
+        }
+        return expr;
+      }
+
+      function parseFunctionDecl() {
+        const annotations = [];
+        while (check("AT_ANNOTATION")) {
+          const tok = advance();
+          const args = match("LPAREN") ? parseValueArgList() : [];
+          annotations.push({ astId: nextAstId(), nodeType: "KtAnnotationEntry", name: tok.lexeme, args, line: tok.line });
+        }
+        if (checkKw("fun")) advance();
+        const fnTok = check("IDENTIFIER") ? advance() : { lexeme: "GeneratedScreen", line: 1 };
+        if (match("LPAREN")) {
+          while (!check("RPAREN") && !isAtEnd()) advance();
+          match("RPAREN");
+        }
+        const bodyStatements = [];
+        if (match("LBRACE")) {
+          while (!check("RBRACE") && !isAtEnd()) {
+            const expr = parseExpression();
+            if (expr && expr.nodeType === "KtCallExpression") {
+              bodyStatements.push(expr);
+            }
+          }
+          match("RBRACE");
+        }
+        return {
+          astId: nextAstId(),
+          nodeType: "KtNamedFunction",
+          name: fnTok.lexeme,
+          annotations,
+          bodyStatements,
+          line: fnTok.line
+        };
+      }
+
+      let packageName = "com.example.ui";
+      const imports = [];
+      const declarations = [];
+
+      while (!isAtEnd()) {
+        if (checkKw("package")) {
+          advance();
+          packageName = parseQualifiedIdent();
+        } else if (checkKw("import")) {
+          advance();
+          imports.push(parseQualifiedIdent());
+        } else if (check("AT_ANNOTATION") || checkKw("fun")) {
+          declarations.push(parseFunctionDecl());
+        } else {
+          advance();
+        }
+      }
+
+      return {
+        astId: nextAstId(),
+        nodeType: "KtFile",
+        packageName,
+        imports,
+        declarations,
+        totalAstNodes: astIdSeq - 1
+      };
+    }
+
+    /**************************************************************************
+     * 4. AST -> FIGMA SCENEGRAPH COMPILER (AstToFigmaTransformer)
+     **************************************************************************/
+    function exprToCodeString(expr) {
+      if (!expr) return "";
+      switch (expr.nodeType) {
+        case "KtStringTemplateExpression": return `"${expr.value}"`;
+        case "KtConstantExpression": return expr.raw !== undefined ? expr.raw : String(expr.value);
+        case "KtNameReferenceExpression": return expr.identifier;
+        case "KtDotQualifiedExpression": return `${exprToCodeString(expr.receiver)}.${exprToCodeString(expr.selector)}`;
+        case "KtCallExpression": {
+          const args = (expr.valueArguments || []).map(a => (a.name ? `${a.name} = ` : "") + exprToCodeString(a.expression)).join(", ");
+          return `${expr.calleeName}(${args})`;
+        }
+        default: return "";
+      }
+    }
+
+    function extractFirstNumber(expr) {
+      if (!expr) return null;
+      if (expr.nodeType === "KtConstantExpression" && typeof expr.value === "number") return expr.value;
+      if (expr.nodeType === "KtDotQualifiedExpression") {
+        const l = extractFirstNumber(expr.receiver);
+        return l !== null ? l : extractFirstNumber(expr.selector);
+      }
+      if (expr.nodeType === "KtCallExpression") {
+        for (const arg of expr.valueArguments || []) {
+          const v = extractFirstNumber(arg.expression);
+          if (v !== null) return v;
+        }
+      }
+      return null;
+    }
+
+    function hexNumberToCss(num) {
+      if (typeof num !== "number" || isNaN(num)) return "#0f172a";
+      const unsigned = num >>> 0;
+      const r = (unsigned >> 16) & 0xFF;
+      const g = (unsigned >> 8) & 0xFF;
+      const b = unsigned & 0xFF;
+      return "#" + [r, g, b].map(x => x.toString(16).padStart(2, "0")).join("");
+    }
+
+    function cssHexToFigmaColor(hex) {
+      const clean = (hex || "#0f172a").replace("#", "").trim();
+      const full = clean.length === 3 ? clean.split("").map(c => c + c).join("") : clean.padEnd(6, "0");
+      const r = parseInt(full.slice(0, 2), 16) / 255;
+      const g = parseInt(full.slice(2, 4), 16) / 255;
+      const b = parseInt(full.slice(4, 6), 16) / 255;
+      return {
+        r: Number(r.toFixed(3)),
+        g: Number(g.toFixed(3)),
+        b: Number(b.toFixed(3)),
+        a: 1
+      };
+    }
+
+    function figmaColorToCssHex(c) {
+      if (!c) return "#0f172a";
+      const r = Math.round((c.r || 0) * 255).toString(16).padStart(2, "0");
+      const g = Math.round((c.g || 0) * 255).toString(16).padStart(2, "0");
+      const b = Math.round((c.b || 0) * 255).toString(16).padStart(2, "0");
+      return `#${r}${g}${b}`;
+    }
+
+    function extractColorCss(expr) {
+      if (!expr) return null;
+      if (expr.nodeType === "KtCallExpression" && expr.calleeName === "Color") {
+        const firstArg = expr.valueArguments[0]?.expression;
+        if (firstArg && typeof firstArg.value === "number") {
+          return hexNumberToCss(firstArg.value);
+        }
+      }
+      const s = exprToCodeString(expr);
+      if (s.endsWith(".White")) return "#ffffff";
+      if (s.endsWith(".Black")) return "#000000";
+      if (s.endsWith(".Gray")) return "#64748b";
+      if (s.endsWith(".Blue")) return "#2563eb";
+      return null;
+    }
+
+    function unrollModifierChain(expr) {
+      const calls = [];
+      function walk(node) {
+        if (!node) return;
+        if (node.nodeType === "KtDotQualifiedExpression") {
+          walk(node.receiver);
+          walk(node.selector);
+        } else if (node.nodeType === "KtCallExpression") {
+          calls.push(node);
+        }
+      }
+      walk(expr);
+
+      const mod = {
+        fillMaxWidth: false,
+        widthDp: null,
+        heightDp: null,
+        padding: { top: 0, right: 0, bottom: 0, left: 0 },
+        bgHex: null,
+        cornerRadius: 0,
+        borderWidth: 0,
+        borderHex: null,
+        rotationDeg: 0,
+        overflowDirection: "NONE",
+        rawSteps: calls.map(c => exprToCodeString(c))
+      };
+
+      for (const c of calls) {
+        if (c.calleeName === "fillMaxWidth" || c.calleeName === "fillMaxSize") {
+          mod.fillMaxWidth = true;
+        } else if (c.calleeName === "width") {
+          mod.widthDp = extractFirstNumber(c);
+        } else if (c.calleeName === "height") {
+          mod.heightDp = extractFirstNumber(c);
+        } else if (c.calleeName === "size") {
+          const v = extractFirstNumber(c);
+          if (v !== null) { mod.widthDp = v; mod.heightDp = v; }
+        } else if (c.calleeName === "padding") {
+          for (const arg of c.valueArguments || []) {
+            const v = extractFirstNumber(arg.expression) || 0;
+            if (!arg.name) {
+              mod.padding = { top: v, right: v, bottom: v, left: v };
+            } else if (arg.name === "horizontal") {
+              mod.padding.left = v; mod.padding.right = v;
+            } else if (arg.name === "vertical") {
+              mod.padding.top = v; mod.padding.bottom = v;
+            } else if (arg.name === "top") mod.padding.top = v;
+            else if (arg.name === "bottom") mod.padding.bottom = v;
+            else if (arg.name === "start" || arg.name === "left") mod.padding.left = v;
+            else if (arg.name === "end" || arg.name === "right") mod.padding.right = v;
+          }
+        } else if (c.calleeName === "background") {
+          const cHex = extractColorCss(c.valueArguments[0]?.expression);
+          if (cHex) mod.bgHex = cHex;
+          if (c.valueArguments[1]) {
+            const r = extractFirstNumber(c.valueArguments[1].expression);
+            if (r !== null) mod.cornerRadius = r;
+          }
+        } else if (c.calleeName === "clip") {
+          const r = extractFirstNumber(c.valueArguments[0]?.expression);
+          if (r !== null) mod.cornerRadius = r;
+        } else if (c.calleeName === "border") {
+          mod.borderWidth = extractFirstNumber(c.valueArguments[0]?.expression) || 1;
+          mod.borderHex = extractColorCss(c.valueArguments[1]?.expression) || "#cbd5e1";
+          if (c.valueArguments[2]) {
+            const r = extractFirstNumber(c.valueArguments[2].expression);
+            if (r !== null) mod.cornerRadius = r;
+          }
+        } else if (c.calleeName === "rotate" || c.calleeName === "graphicsLayer") {
+          const deg = extractFirstNumber(c);
+          if (deg !== null) mod.rotationDeg = deg;
+        } else if (c.calleeName === "verticalScroll") {
+          mod.overflowDirection = "VERTICAL_SCROLLING";
+        } else if (c.calleeName === "horizontalScroll") {
+          mod.overflowDirection = "HORIZONTAL_SCROLLING";
+        }
+      }
+      return mod;
+    }
+
+    function findArg(callNode, name, posIndex = null) {
+      const args = callNode.valueArguments || [];
+      const byName = args.find(a => a.name === name);
+      if (byName) return byName;
+      if (posIndex !== null && args[posIndex] && !args[posIndex].name) return args[posIndex];
+      return null;
+    }
+
+    function transformAstToFigma(ktFileAst) {
+      let figmaIdCounter = 1;
+      const nextFigmaId = () => `1:${figmaIdCounter++}`;
+      const astMap = new Map();
+
+      const fn = ktFileAst.declarations[0];
+      if (!fn || !fn.bodyStatements.length) {
+        return {
+          root: {
+            id: "1:1",
+            name: "EmptyFrame",
+            type: "FRAME",
+            layoutMode: "VERTICAL",
+            paddingTop: 16, paddingRight: 16, paddingBottom: 16, paddingLeft: 16,
+            itemSpacing: 8,
+            cornerRadius: 12,
+            fills: [{ type: "SOLID", visible: true, color: cssHexToFigmaColor("#ffffff") }],
+            strokes: [],
+            strokeWeight: 0,
+            children: []
+          },
+          astMap,
+          layerCount: 1
+        };
+      }
+
+      function callToFigma(call) {
+        const id = nextFigmaId();
+        const callee = call.calleeName;
+        const modArg = findArg(call, "modifier");
+        const mod = modArg ? unrollModifierChain(modArg.expression) : unrollModifierChain(null);
+        call._unrolledModifier = mod;
+        call._mappedFigmaId = id;
+        astMap.set(id, call);
+
+        if (callee === "Text") {
+          const txtArg = findArg(call, "text", 0);
+          const chars = txtArg?.expression?.value || "Text";
+          const fsArg = findArg(call, "fontSize");
+          const fontSize = fsArg ? (extractFirstNumber(fsArg.expression) || 14) : 14;
+          const fwArg = findArg(call, "fontWeight");
+          const fwStr = fwArg ? exprToCodeString(fwArg.expression) : "Normal";
+          const fontWeight = fwStr.includes("Bold") ? 700 : fwStr.includes("SemiBold") ? 600 : fwStr.includes("Medium") ? 500 : 400;
+          const colArg = findArg(call, "color");
+          const textHex = (colArg ? extractColorCss(colArg.expression) : null) || "#0f172a";
+
+          return {
+            id,
+            astId: call.astId,
+            name: `Text_${chars.slice(0, 18)}`,
+            type: "TEXT",
+            characters: chars,
+            fills: [{ type: "SOLID", visible: true, color: cssHexToFigmaColor(textHex) }],
+            style: {
+              fontFamily: "Inter",
+              fontWeight,
+              fontSize,
+              lineHeightPx: Math.round(fontSize * 1.4)
+            },
+            rotation: mod.rotationDeg || 0,
+            layoutSizingHorizontal: mod.fillMaxWidth ? "FILL" : "HUG",
+            layoutSizingVertical: "HUG"
+          };
+        }
+
+        if (callee === "HorizontalDivider" || callee === "Divider" || callee === "Spacer") {
+          const isDiv = callee.includes("Divider");
+          const colArg = findArg(call, "color");
+          const divHex = (colArg ? extractColorCss(colArg.expression) : null) || "#e2e8f0";
+          return {
+            id,
+            astId: call.astId,
+            name: callee,
+            type: "RECTANGLE",
+            layoutSizingHorizontal: "FILL",
+            layoutSizingVertical: "FIXED",
+            cornerRadius: 0,
+            fills: isDiv ? [{ type: "SOLID", visible: true, color: cssHexToFigmaColor(divHex) }] : [],
+            strokes: [],
+            strokeWeight: 0,
+            absoluteBoundingBox: { x: 0, y: 0, width: 300, height: mod.heightDp || (isDiv ? 1 : 12) },
+            children: []
+          };
+        }
+
+        const isRow = callee === "Row" || callee === "LazyRow";
+        const isButton = callee === "Button" || callee === "OutlinedButton";
+        const layoutMode = isRow || isButton ? "HORIZONTAL" : callee === "Box" ? "NONE" : "VERTICAL";
+
+        let itemSpacing = 0;
+        let primaryAxisAlignItems = isButton ? "CENTER" : "MIN";
+        let counterAxisAlignItems = isButton ? "CENTER" : "MIN";
+
+        const arrArg = findArg(call, "verticalArrangement") || findArg(call, "horizontalArrangement");
+        if (arrArg) {
+          const code = exprToCodeString(arrArg.expression);
+          if (code.includes("SpaceBetween")) primaryAxisAlignItems = "SPACE_BETWEEN";
+          else if (code.includes("Center")) primaryAxisAlignItems = "CENTER";
+          else if (code.includes("spacedBy")) itemSpacing = extractFirstNumber(arrArg.expression) || 8;
+        }
+
+        const alignArg = findArg(call, "horizontalAlignment") || findArg(call, "verticalAlignment");
+        if (alignArg) {
+          const code = exprToCodeString(alignArg.expression);
+          if (code.includes("Center")) counterAxisAlignItems = "CENTER";
+        }
+
+        const defaultBg = isButton ? "#4f46e5" : (callee === "Card" || callee === "Surface" ? "#ffffff" : null);
+        const bgHex = mod.bgHex || defaultBg;
+        const fills = bgHex ? [{ type: "SOLID", visible: true, color: cssHexToFigmaColor(bgHex) }] : [];
+
+        const strokes = mod.borderHex
+          ? [{ type: "SOLID", visible: true, color: cssHexToFigmaColor(mod.borderHex) }]
+          : [];
+
+        const padTop = mod.padding.top || (isButton ? 12 : 0);
+        const padRight = mod.padding.right || (isButton ? 18 : 0);
+        const padBottom = mod.padding.bottom || (isButton ? 12 : 0);
+        const padLeft = mod.padding.left || (isButton ? 18 : 0);
+        const radius = mod.cornerRadius || (isButton ? 20 : callee === "Card" ? 16 : 0);
+
+        const childStatements = call.trailingLambda?.statements || [];
+        const children = childStatements.map(st => callToFigma(st));
+
+        return {
+          id,
+          astId: call.astId,
+          name: `${callee}_${id.replace(":", "_")}`,
+          composableType: callee,
+          type: "FRAME",
+          layoutMode,
+          primaryAxisAlignItems,
+          counterAxisAlignItems,
+          layoutSizingHorizontal: mod.fillMaxWidth ? "FILL" : "HUG",
+          layoutSizingVertical: "HUG",
+          paddingTop: padTop,
+          paddingRight: padRight,
+          paddingBottom: padBottom,
+          paddingLeft: padLeft,
+          itemSpacing,
+          cornerRadius: radius,
+          rotation: mod.rotationDeg || 0,
+          overflowDirection: callee === "LazyColumn" ? "VERTICAL_SCROLLING" : callee === "LazyRow" ? "HORIZONTAL_SCROLLING" : (mod.overflowDirection || "NONE"),
+          fills,
+          strokes,
+          strokeWeight: mod.borderWidth || 0,
+          children
+        };
+      }
+
+      const rootFigma = callToFigma(fn.bodyStatements[0]);
+      rootFigma.name = fn.name || rootFigma.name;
+      return { root: rootFigma, astMap, layerCount: figmaIdCounter - 1 };
+    }
+
+    /**************************************************************************
+     * 5. FIGMA SCENEGRAPH -> KOTLIN AST -> JETPACK COMPOSE CODE GENERATOR
+     **************************************************************************/
+    function figmaColorToKotlinHexLiteral(color) {
+      const r = Math.round((color?.r ?? 0) * 255).toString(16).padStart(2, "0").toUpperCase();
+      const g = Math.round((color?.g ?? 0) * 255).toString(16).padStart(2, "0").toUpperCase();
+      const b = Math.round((color?.b ?? 0) * 255).toString(16).padStart(2, "0").toUpperCase();
+      return `Color(0xFF${r}${g}${b})`;
+    }
+
+    function generateKotlinFromFigmaNode(rootNode, fnName = "PaymentCardScreen") {
+      function emitNode(node, indent = 1) {
+        const pad = "    ".repeat(indent);
+        const innerPad = "    ".repeat(indent + 1);
+
+        if (node.type === "TEXT") {
+          const textVal = (node.characters || "Text").replace(/"/g, '\\"');
+          const fs = node.style?.fontSize || 14;
+          const fw = node.style?.fontWeight || 400;
+          const weightStr = fw >= 700 ? "FontWeight.Bold" : fw >= 600 ? "FontWeight.SemiBold" : fw >= 500 ? "FontWeight.Medium" : null;
+          const colorPaint = (node.fills || [])[0];
+          const colorStr = colorPaint ? figmaColorToKotlinHexLiteral(colorPaint.color) : "Color(0xFF0F172A)";
+
+          const lines = [
+            `${innerPad}text = "${textVal}"`,
+            `${innerPad}fontSize = ${fs}.sp`
+          ];
+          if (weightStr) lines.push(`${innerPad}fontWeight = ${weightStr}`);
+          lines.push(`${innerPad}color = ${colorStr}`);
+          if (node.rotation && Number(node.rotation) !== 0) {
+            lines.push(`${innerPad}modifier = Modifier.rotate(${node.rotation}f)`);
+          }
+
+          return `${pad}Text(\n${lines.join(",\n")}\n${pad})`;
+        }
+
+        if (node.type === "RECTANGLE") {
+          const h = node.absoluteBoundingBox?.height || 1;
+          if (h <= 2 && node.fills && node.fills.length) {
+            return `${pad}HorizontalDivider(color = ${figmaColorToKotlinHexLiteral(node.fills[0].color)})`;
+          }
+          return `${pad}Spacer(modifier = Modifier.height(${h}.dp))`;
+        }
+
+        // Frame / Container
+        const lowerName = (node.name || "").toLowerCase();
+        const isButton = node.composableType === "Button" || lowerName.includes("button") || lowerName.includes("btn");
+        const composable = isButton
+          ? "Button"
+          : node.layoutMode === "HORIZONTAL"
+          ? "Row"
+          : node.layoutMode === "NONE"
+          ? "Box"
+          : "Column";
+
+        // Synthesize Modifier chain
+        const modParts = ["Modifier"];
+        if (node.layoutSizingHorizontal === "FILL" || indent === 1) {
+          modParts.push("fillMaxWidth()");
+        }
+        const fill = (node.fills || [])[0];
+        if (fill) {
+          const colStr = figmaColorToKotlinHexLiteral(fill.color);
+          if ((node.cornerRadius || 0) > 0) {
+            modParts.push(`background(${colStr}, RoundedCornerShape(${node.cornerRadius}.dp))`);
+          } else {
+            modParts.push(`background(${colStr})`);
+          }
+        }
+        const stroke = (node.strokes || [])[0];
+        if (stroke && (node.strokeWeight || 0) > 0) {
+          const sCol = figmaColorToKotlinHexLiteral(stroke.color);
+          const rad = (node.cornerRadius || 0) > 0 ? `, RoundedCornerShape(${node.cornerRadius}.dp)` : "";
+          modParts.push(`border(${node.strokeWeight}.dp, ${sCol}${rad})`);
+        }
+        const pt = node.paddingTop || 0;
+        const pr = node.paddingRight || 0;
+        const pb = node.paddingBottom || 0;
+        const pl = node.paddingLeft || 0;
+        if (pt > 0 || pr > 0 || pb > 0 || pl > 0) {
+          if (pt === pr && pr === pb && pb === pl) {
+            modParts.push(`padding(${pt}.dp)`);
+          } else {
+            modParts.push(`padding(horizontal = ${pl}.dp, vertical = ${pt}.dp)`);
+          }
+        }
+        if (node.rotation && Number(node.rotation) !== 0) {
+          modParts.push(`rotate(${node.rotation}f)`);
+        }
+        if (node.overflowDirection === "VERTICAL_SCROLLING") {
+          modParts.push("verticalScroll(rememberScrollState())");
+        } else if (node.overflowDirection === "HORIZONTAL_SCROLLING") {
+          modParts.push("horizontalScroll(rememberScrollState())");
+        }
+
+        const args = [];
+        if (modParts.length > 1) {
+          args.push(`${innerPad}modifier = ${modParts.join(".")}`);
+        }
+
+        if (!isButton) {
+          if (composable === "Column") {
+            if (node.primaryAxisAlignItems === "SPACE_BETWEEN") {
+              args.push(`${innerPad}verticalArrangement = Arrangement.SpaceBetween`);
+            } else if ((node.itemSpacing || 0) > 0) {
+              args.push(`${innerPad}verticalArrangement = Arrangement.spacedBy(${node.itemSpacing}.dp)`);
+            }
+          } else if (composable === "Row") {
+            if (node.primaryAxisAlignItems === "SPACE_BETWEEN") {
+              args.push(`${innerPad}horizontalArrangement = Arrangement.SpaceBetween`);
+            } else if ((node.itemSpacing || 0) > 0) {
+              args.push(`${innerPad}horizontalArrangement = Arrangement.spacedBy(${node.itemSpacing}.dp)`);
+            }
+            if (node.counterAxisAlignItems === "CENTER") {
+              args.push(`${innerPad}verticalAlignment = Alignment.CenterVertically`);
+            }
+          }
+        }
+
+        const argSection = args.length ? `(\n${args.join(",\n")}\n${pad})` : "()";
+        const childrenCode = (node.children || []).map(ch => emitNode(ch, indent + 1)).join("\n");
+        return `${pad}${composable}${argSection} {\n${childrenCode}\n${pad}}`;
+      }
+
+      const cleanFnName = (rootNode.name || fnName).replace(/[^a-zA-Z0-9]/g, "") || "GeneratedScreen";
+      return `package com.example.generated
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+@Composable
+fun ${cleanFnName}() {
+${emitNode(rootNode, 1)}
+}`;
+    }
+
+    /**************************************************************************
+     * 6. APPLICATION STATE & UI RENDERING
+     **************************************************************************/
+    let currentTokens = [];
+    let currentAst = null;
+    let currentFigmaRoot = null;
+    let selectedFigmaNodeId = "1:1";
+    let showLayoutGuides = true;
+    let autoSyncEnabled = true;
+    let deviceWidthDp = 340;
+    let isLandscape = false;
+
+    function showToast(msg) {
+      const el = document.getElementById("toastBanner");
+      el.textContent = msg;
+      el.classList.remove("hidden");
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => el.classList.add("hidden"), 2400);
+    }
+
+    function findFigmaNodeById(node, id) {
+      if (!node) return null;
+      if (node.id === id) return node;
+      for (const child of node.children || []) {
+        const found = findFigmaNodeById(child, id);
+        if (found) return found;
+      }
+      return null;
+    }
+
+    function deleteFigmaNodeById(parent, targetId) {
+      if (!parent || !parent.children) return false;
+      const idx = parent.children.findIndex(c => c.id === targetId);
+      if (idx !== -1) {
+        parent.children.splice(idx, 1);
+        return true;
+      }
+      for (const ch of parent.children) {
+        if (deleteFigmaNodeById(ch, targetId)) return true;
+      }
+      return false;
+    }
+
+    function getNextMaxFigmaId(node) {
+      let max = 1;
+      function walk(n) {
+        if (!n) return;
+        const parts = String(n.id || "1:1").split(":");
+        const num = parseInt(parts[1] || "1", 10);
+        if (num > max) max = num;
+        (n.children || []).forEach(walk);
+      }
+      walk(node);
+      return `1:${max + 1}`;
+    }
+
+    // Render interactive Figma SceneGraph to DOM
+    function renderFigmaCanvas() {
+      const mount = document.getElementById("figmaVisualCanvas");
+      mount.innerHTML = "";
+      if (!currentFigmaRoot) return;
+
+      document.getElementById("figmaRootFrameLabel").textContent =
+        `FRAME: ${currentFigmaRoot.name || "Screen"} (${currentFigmaRoot.layoutMode || "VERTICAL"})`;
+
+      function buildDom(node) {
+        const isSelected = node.id === selectedFigmaNodeId;
+
+        if (node.type === "TEXT") {
+          const span = document.createElement("div");
+          const fs = node.style?.fontSize || 14;
+          const fw = node.style?.fontWeight || 400;
+          const fillHex = figmaColorToCssHex(node.fills?.[0]?.color);
+          span.style.fontSize = `${fs}px`;
+          span.style.fontWeight = String(fw);
+          span.style.color = fillHex;
+          span.style.lineHeight = "1.35";
+          if (node.rotation) span.style.transform = `rotate(${node.rotation}deg)`;
+          span.className = "cursor-pointer rounded px-0.5 transition-all relative " +
+            (isSelected ? "figma-selected-outline" : "hover:outline hover:outline-1 hover:outline-sky-400/60");
+          span.textContent = node.characters || "Text";
+          span.addEventListener("click", (e) => {
+            e.stopPropagation();
+            selectNode(node.id);
+          });
+          return span;
+        }
+
+        if (node.type === "RECTANGLE") {
+          const rect = document.createElement("div");
+          const h = node.absoluteBoundingBox?.height || 1;
+          const fillHex = node.fills?.[0] ? figmaColorToCssHex(node.fills[0].color) : "transparent";
+          rect.style.height = `${h}px`;
+          rect.style.width = "100%";
+          rect.style.backgroundColor = fillHex;
+          rect.className = "cursor-pointer my-0.5 " + (isSelected ? "figma-selected-outline" : "");
+          rect.addEventListener("click", (e) => {
+            e.stopPropagation();
+            selectNode(node.id);
+          });
+          return rect;
+        }
+
+        // FRAME
+        const div = document.createElement("div");
+        const isHoriz = node.layoutMode === "HORIZONTAL";
+        div.style.display = "flex";
+        div.style.flexDirection = isHoriz ? "row" : "column";
+        if (node.primaryAxisAlignItems === "SPACE_BETWEEN") {
+          div.style.justifyContent = "space-between";
+        } else if (node.primaryAxisAlignItems === "CENTER") {
+          div.style.justifyContent = "center";
+        } else {
+          div.style.justifyContent = "flex-start";
+        }
+        if (node.counterAxisAlignItems === "CENTER") {
+          div.style.alignItems = "center";
+        }
+        div.style.gap = `${node.itemSpacing || 0}px`;
+        div.style.paddingTop = `${node.paddingTop || 0}px`;
+        div.style.paddingRight = `${node.paddingRight || 0}px`;
+        div.style.paddingBottom = `${node.paddingBottom || 0}px`;
+        div.style.paddingLeft = `${node.paddingLeft || 0}px`;
+        div.style.borderRadius = `${node.cornerRadius || 0}px`;
+        if (node.layoutSizingHorizontal === "FILL") {
+          div.style.width = "100%";
+        }
+        if (node.rotation) {
+          div.style.transform = `rotate(${node.rotation}deg)`;
+        }
+        if (node.overflowDirection === "VERTICAL_SCROLLING") {
+          div.style.overflowY = "auto";
+          div.style.maxHeight = "240px";
+        } else if (node.overflowDirection === "HORIZONTAL_SCROLLING") {
+          div.style.overflowX = "auto";
+        }
+
+        if (node.fills && node.fills[0]) {
+          div.style.backgroundColor = figmaColorToCssHex(node.fills[0].color);
+        }
+        if (node.strokes && node.strokes[0] && (node.strokeWeight || 0) > 0) {
+          div.style.border = `${node.strokeWeight}px solid ${figmaColorToCssHex(node.strokes[0].color)}`;
+        }
+
+        div.className = "cursor-pointer transition-all relative " +
+          (isSelected ? "figma-selected-outline " : "hover:outline hover:outline-1 hover:outline-sky-400/50 ") +
+          (showLayoutGuides ? "figma-guide-dashed" : "");
+
+        if (showLayoutGuides && (node.itemSpacing > 0 || node.paddingTop > 0)) {
+          const badge = document.createElement("span");
+          badge.className = "absolute -top-2 right-1 px-1 rounded bg-pink-600/90 text-white mono text-[9px] pointer-events-none shadow";
+          badge.textContent = `${node.layoutMode === "HORIZONTAL" ? "Row" : "Col"} pad:${node.paddingTop || 0} gap:${node.itemSpacing || 0}`;
+          div.appendChild(badge);
+        }
+
+        (node.children || []).forEach(ch => {
+          div.appendChild(buildDom(ch));
+        });
+
+        div.addEventListener("click", (e) => {
+          e.stopPropagation();
+          selectNode(node.id);
+        });
+
+        return div;
+      }
+
+      mount.appendChild(buildDom(currentFigmaRoot));
+      setTimeout(() => {
+        const rect = mount.getBoundingClientRect();
+        document.getElementById("figmaRootDimensions").textContent =
+          `${Math.round(rect.width)} × ${Math.round(rect.height)} dp`;
+      }, 20);
+    }
+
+    // Render Kotlin AST Tree in Center Tab 1
+    function renderAstTree() {
+      const container = document.getElementById("astTreeContainer");
+      container.innerHTML = "";
+      if (!currentAst) return;
+
+      function createTreeRow(label, badgeText, badgeColor, depth, onClick, isHighlighted = false) {
+        const row = document.createElement("div");
+        row.style.paddingLeft = `${depth * 14 + 6}px`;
+        row.className = `py-1 px-2 rounded cursor-pointer flex items-center justify-between gap-2 transition ${
+          isHighlighted ? "bg-purple-500/25 border border-purple-500/50 text-white" : "hover:bg-slate-900 text-slate-300"
+        }`;
+        const left = document.createElement("span");
+        left.className = "truncate";
+        left.textContent = label;
+
+        const right = document.createElement("span");
+        right.className = `text-[10px] px-1.5 py-0.5 rounded shrink-0 ${badgeColor}`;
+        right.textContent = badgeText;
+
+        row.appendChild(left);
+        row.appendChild(right);
+        row.addEventListener("click", onClick);
+        return row;
+      }
+
+      container.appendChild(
+        createTreeRow(`📦 KtFile (${currentAst.packageName})`, `${currentAst.imports.length} imports`, "bg-slate-800 text-slate-400", 0, () => {
+          showAstNodeDetails(currentAst);
+        })
+      );
+
+      for (const fn of currentAst.declarations) {
+        container.appendChild(
+          createTreeRow(`ƒ KtNamedFunction: ${fn.name}()`, "@Composable", "bg-indigo-500/20 text-indigo-300", 1, () => {
+            showAstNodeDetails(fn);
+          })
+        );
+
+        function walkCall(call, depth) {
+          const isMatched = call._mappedFigmaId === selectedFigmaNodeId;
+          const argCount = (call.valueArguments || []).length;
+          const modSteps = call._unrolledModifier?.rawSteps?.length || 0;
+          const badge = modSteps > 0 ? `Modifier(${modSteps})` : `${argCount} args`;
+          container.appendChild(
+            createTreeRow(
+              `├─ KtCallExpression: ${call.calleeName}`,
+              badge,
+              "bg-purple-500/20 text-purple-300",
+              depth,
+              () => {
+                if (call._mappedFigmaId) selectNode(call._mappedFigmaId);
+                showAstNodeDetails(call);
+              },
+              isMatched
+            )
+          );
+          const childStmts = call.trailingLambda?.statements || [];
+          childStmts.forEach(ch => walkCall(ch, depth + 1));
+        }
+
+        fn.bodyStatements.forEach(st => walkCall(st, 2));
+      }
+    }
+
+    function showAstNodeDetails(astNode) {
+      const titleEl = document.getElementById("astDetailTitle");
+      const badgeEl = document.getElementById("astDetailBadge");
+      const bodyEl = document.getElementById("astDetailBody");
+
+      titleEl.textContent = `AST Node: ${astNode.nodeType}`;
+      badgeEl.textContent = `Line ${astNode.line || 1}`;
+
+      if (astNode.nodeType === "KtCallExpression") {
+        const argsSummary = (astNode.valueArguments || [])
+          .map(a => `• ${a.name || "<pos>"}: ${exprToCodeString(a.expression)}`)
+          .join("\n") || "• (no value arguments)";
+        const modChain = astNode._unrolledModifier?.rawSteps?.length
+          ? astNode._unrolledModifier.rawSteps.join(" → ")
+          : "None";
+        bodyEl.innerHTML = `
+          <div><span class="text-slate-400">Callee:</span> <span class="text-indigo-300 font-semibold">${astNode.calleeName}</span></div>
+          <div><span class="text-slate-400">Mapped Figma Node ID:</span> <span class="text-pink-300">${astNode._mappedFigmaId || "N/A"}</span></div>
+          <div><span class="text-slate-400">Unrolled Modifier AST Chain:</span> <span class="text-emerald-300">${modChain}</span></div>
+          <div class="pt-1 text-slate-400">Value Arguments (KtValueArgument):</div>
+          <pre class="text-[11px] text-slate-200 whitespace-pre-wrap">${argsSummary}</pre>
+        `;
+      } else {
+        bodyEl.innerHTML = `<pre class="text-[11px] text-slate-300 whitespace-pre-wrap">${JSON.stringify(
+          { nodeType: astNode.nodeType, name: astNode.name || astNode.packageName, line: astNode.line },
+          null,
+          2
+        )}</pre>`;
+      }
+    }
+
+    // Render Lexer Tokens in Center Tab 3
+    function renderLexerTokens() {
+      const container = document.getElementById("tokenListContainer");
+      const query = (document.getElementById("tokenSearchInput").value || "").toLowerCase();
+      container.innerHTML = "";
+
+      const filtered = currentTokens.filter(t =>
+        t.type !== "EOF" &&
+        (!query || t.lexeme.toLowerCase().includes(query) || t.type.toLowerCase().includes(query))
+      );
+
+      filtered.slice(0, 180).forEach((tok, i) => {
+        const row = document.createElement("div");
+        row.className = "flex items-center justify-between px-2.5 py-1 rounded bg-slate-900/90 border border-slate-800/80";
+        row.innerHTML = `
+          <div class="flex items-center gap-2 truncate">
+            <span class="text-slate-500 text-[10px] w-7">#${i + 1}</span>
+            <span class="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 text-[10px]">${tok.type}</span>
+            <span class="text-slate-100 truncate">${tok.lexeme}</span>
+          </div>
+          <span class="text-slate-500 text-[10px] shrink-0">L${tok.line}:C${tok.col}</span>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    // Select a Figma Node and populate the Inspector + highlight AST Node
+    function selectNode(figmaId) {
+      selectedFigmaNodeId = figmaId;
+      const node = findFigmaNodeById(currentFigmaRoot, figmaId) || currentFigmaRoot;
+      if (!node) return;
+
+      document.getElementById("inspectorNodeBadge").textContent = `${node.type} (${node.id})`;
+      const textInput = document.getElementById("inspTextInput");
+      const layoutSelect = document.getElementById("inspLayoutMode");
+      const colorPicker = document.getElementById("inspColorPicker");
+      const colorInput = document.getElementById("inspColorInput");
+      const paddingInput = document.getElementById("inspPaddingInput");
+      const metricLabel = document.getElementById("inspMetricLabel");
+      const metricInput = document.getElementById("inspMetricInput");
+      const radiusInput = document.getElementById("inspRadiusInput");
+      const weightSelect = document.getElementById("inspWeightSelect");
+
+      if (node.type === "TEXT") {
+        textInput.value = node.characters || "";
+        layoutSelect.value = "NONE";
+        layoutSelect.disabled = true;
+        paddingInput.value = 0;
+        metricLabel.textContent = "Font Size (sp)";
+        metricInput.value = node.style?.fontSize || 14;
+        radiusInput.value = 0;
+        weightSelect.value = String(node.style?.fontWeight || 400);
+        weightSelect.disabled = false;
+      } else {
+        textInput.value = node.name || "Frame";
+        layoutSelect.value = node.layoutMode || "VERTICAL";
+        layoutSelect.disabled = false;
+        paddingInput.value = node.paddingTop || 0;
+        metricLabel.textContent = "Item Spacing (dp)";
+        metricInput.value = node.itemSpacing || 0;
+        radiusInput.value = node.cornerRadius || 0;
+        weightSelect.disabled = true;
+      }
+
+      document.getElementById("inspRotationInput").value = node.rotation || 0;
+      const scrollSel = document.getElementById("inspScrollSelect");
+      scrollSel.value = node.overflowDirection || "NONE";
+      scrollSel.disabled = node.type === "TEXT";
+
+      const hex = figmaColorToCssHex(node.fills?.[0]?.color);
+      colorPicker.value = hex;
+      colorInput.value = hex;
+
+      renderFigmaCanvas();
+      renderAstTree();
+
+      if (window._lastAstMap && window._lastAstMap.has(node.id)) {
+        showAstNodeDetails(window._lastAstMap.get(node.id));
+      }
+    }
+
+    // Direction 1: Parse Compose Code -> AST -> Figma SceneGraph -> Render UI
+    function compileComposeToFigma() {
+      const source = document.getElementById("kotlinCodeEditor").value;
+      const lineCount = source.split("\n").length;
+      document.getElementById("kotlinLineCount").textContent = `${lineCount} lines`;
+
+      try {
+        const t0 = performance.now();
+        currentTokens = tokenizeKotlin(source);
+        currentAst = parseKotlinAst(currentTokens);
+        const { root, astMap, layerCount } = transformAstToFigma(currentAst);
+        currentFigmaRoot = root;
+        window._lastAstMap = astMap;
+
+        if (!findFigmaNodeById(currentFigmaRoot, selectedFigmaNodeId)) {
+          selectedFigmaNodeId = currentFigmaRoot.id;
+        }
+
+        const elapsed = (performance.now() - t0).toFixed(1);
+        document.getElementById("metricDirection").textContent = "Compose (.kt) → Kotlin AST → Figma UI";
+        document.getElementById("metricTokenCount").textContent = String(currentTokens.length - 1);
+        document.getElementById("metricAstNodeCount").textContent = String(currentAst.totalAstNodes);
+        document.getElementById("metricFigmaLayerCount").textContent = String(layerCount);
+        document.getElementById("pipelineStatusText").textContent =
+          `✓ Parsed ${currentTokens.length - 1} tokens → ${currentAst.totalAstNodes} AST nodes → ${layerCount} Figma layers (${elapsed}ms)`;
+
+        const fnName = currentAst.declarations[0]?.name || "Screen";
+        document.getElementById("kotlinDiagnosticMsg").textContent = `✓ Parsed @Composable fun ${fnName}()`;
+        document.getElementById("kotlinDiagnosticMsg").className = "text-emerald-400 truncate";
+
+        document.getElementById("figmaJsonEditor").value = JSON.stringify(currentFigmaRoot, null, 2);
+        selectNode(selectedFigmaNodeId);
+        renderLexerTokens();
+      } catch (err) {
+        document.getElementById("kotlinDiagnosticMsg").textContent = `Parser error: ${err.message}`;
+        document.getElementById("kotlinDiagnosticMsg").className = "text-rose-400 truncate";
+      }
+    }
+
+    // Direction 2: Take Figma SceneGraph -> Synthesize Kotlin AST -> Emit Jetpack Compose Code
+    function compileFigmaToCompose() {
+      if (!currentFigmaRoot) return;
+      const t0 = performance.now();
+      const fnName = currentAst?.declarations?.[0]?.name || "GeneratedFigmaScreen";
+      const kotlinCode = generateKotlinFromFigmaNode(currentFigmaRoot, fnName);
+      document.getElementById("kotlinCodeEditor").value = kotlinCode;
+
+      // Re-parse the emitted Kotlin code so the AST Explorer & Token Stream stay 100% synchronized
+      currentTokens = tokenizeKotlin(kotlinCode);
+      currentAst = parseKotlinAst(currentTokens);
+      const { astMap, layerCount } = transformAstToFigma(currentAst);
+      window._lastAstMap = astMap;
+
+      const elapsed = (performance.now() - t0).toFixed(1);
+      document.getElementById("metricDirection").textContent = "Figma SceneGraph → Kotlin AST → Compose (.kt)";
+      document.getElementById("metricTokenCount").textContent = String(currentTokens.length - 1);
+      document.getElementById("metricAstNodeCount").textContent = String(currentAst.totalAstNodes);
+      document.getElementById("metricFigmaLayerCount").textContent = String(layerCount);
+      document.getElementById("pipelineStatusText").textContent =
+        `✓ Synthesized Kotlin AST & emitted @Composable code from Figma tree (${elapsed}ms)`;
+
+      document.getElementById("figmaJsonEditor").value = JSON.stringify(currentFigmaRoot, null, 2);
+      renderFigmaCanvas();
+      renderAstTree();
+      renderLexerTokens();
+    }
+
+    // Apply edits from the Figma Property Inspector
+    function applyInspectorChanges() {
+      const node = findFigmaNodeById(currentFigmaRoot, selectedFigmaNodeId);
+      if (!node) return;
+
+      const textVal = document.getElementById("inspTextInput").value;
+      const layoutMode = document.getElementById("inspLayoutMode").value;
+      const colorHex = document.getElementById("inspColorInput").value;
+      const padVal = parseFloat(document.getElementById("inspPaddingInput").value) || 0;
+      const metricVal = parseFloat(document.getElementById("inspMetricInput").value) || 0;
+      const radiusVal = parseFloat(document.getElementById("inspRadiusInput").value) || 0;
+      const weightVal = parseInt(document.getElementById("inspWeightSelect").value, 10) || 400;
+      const rotationVal = parseFloat(document.getElementById("inspRotationInput").value) || 0;
+      const scrollVal = document.getElementById("inspScrollSelect").value || "NONE";
+      node.rotation = rotationVal;
+      if (node.type !== "TEXT") node.overflowDirection = scrollVal;
+
+      if (node.type === "TEXT") {
+        node.characters = textVal;
+        node.name = `Text_${textVal.slice(0, 16)}`;
+        node.style = node.style || { fontFamily: "Inter", fontSize: 14, fontWeight: 400 };
+        node.style.fontSize = Math.max(8, metricVal);
+        node.style.fontWeight = weightVal;
+      } else {
+        node.name = textVal;
+        node.layoutMode = layoutMode;
+        node.paddingTop = padVal;
+        node.paddingRight = padVal;
+        node.paddingBottom = padVal;
+        node.paddingLeft = padVal;
+        node.itemSpacing = metricVal;
+        node.cornerRadius = radiusVal;
+      }
+
+      node.fills = [{ type: "SOLID", visible: true, color: cssHexToFigmaColor(colorHex) }];
+      compileFigmaToCompose();
+      showToast(`Updated Figma node ${node.id} → Synchronized Kotlin AST`);
+    }
+
+    // Tab switching in Center Pane
+    function switchCenterTab(tab) {
+      const tabs = ["Ast", "FigmaJson", "Tokens", "JvmSource"];
+      tabs.forEach(t => {
+        const btn = document.getElementById("tabBtn" + t);
+        const panel = document.getElementById("panel" + t);
+        if (t === tab) {
+          btn.className = "px-3 py-1.5 rounded-t-lg text-xs font-semibold bg-slate-800 text-purple-300 border-t border-x border-slate-700 whitespace-nowrap";
+          panel.classList.remove("hidden");
+        } else {
+          btn.className = "px-3 py-1.5 rounded-t-lg text-xs font-medium text-slate-400 hover:text-slate-200 whitespace-nowrap";
+          panel.classList.add("hidden");
+        }
+      });
+    }
+
+    function copyTextToClipboard(text, label) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => showToast(`Copied ${label} to clipboard`)).catch(() => fallbackCopy(text, label));
+      } else {
+        fallbackCopy(text, label);
+      }
+    }
+
+    function fallbackCopy(text, label) {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      showToast(`Copied ${label} to clipboard`);
+    }
+
+    /**************************************************************************
+     * 7. EVENT LISTENERS INITIALIZATION
+     **************************************************************************/
+    window.addEventListener("DOMContentLoaded", () => {
+      const editor = document.getElementById("kotlinCodeEditor");
+      editor.value = PRESETS.fintech;
+
+      // Load initial JVM source file
+      document.getElementById("jvmSourceCodeView").textContent = JVM_FILES.parser;
+
+      // Preset switcher
+      document.getElementById("presetSelect").addEventListener("change", (e) => {
+        const key = e.target.value;
+        if (PRESETS[key]) {
+          editor.value = PRESETS[key];
+          selectedFigmaNodeId = "1:1";
+          compileComposeToFigma();
+          showToast(`Loaded preset: ${e.target.options[e.target.selectedIndex].text}`);
+        }
+      });
+
+      // Main conversion buttons
+      document.getElementById("btnComposeToFigma").addEventListener("click", () => {
+        compileComposeToFigma();
+        showToast("Compiled Jetpack Compose (.kt) → Kotlin AST → Figma UI");
+      });
+
+      document.getElementById("btnFigmaToCompose").addEventListener("click", () => {
+        compileFigmaToCompose();
+        showToast("Synthesized Figma SceneGraph → Kotlin AST → Jetpack Compose (.kt)");
+      });
+
+      // Auto-sync toggle
+      document.getElementById("btnToggleAutoSync").addEventListener("click", () => {
+        autoSyncEnabled = !autoSyncEnabled;
+        document.getElementById("autoSyncLabel").textContent = `Auto-Sync: ${autoSyncEnabled ? "ON" : "OFF"}`;
+        document.getElementById("autoSyncDot").className =
+          `w-2 h-2 rounded-full ${autoSyncEnabled ? "bg-emerald-400" : "bg-slate-500"}`;
+        showToast(`Live AST Auto-Sync ${autoSyncEnabled ? "Enabled" : "Disabled"}`);
+      });
+
+      // Kotlin editor live input
+      editor.addEventListener("input", () => {
+        if (autoSyncEnabled) {
+          compileComposeToFigma();
+        }
+      });
+
+      // Format & Copy Kotlin
+      document.getElementById("btnFormatKotlin").addEventListener("click", () => {
+        compileComposeToFigma();
+        compileFigmaToCompose();
+        showToast("Formatted Kotlin source via AST Code Emitter");
+      });
+
+      document.getElementById("btnCopyKotlin").addEventListener("click", () => {
+        copyTextToClipboard(editor.value, "Jetpack Compose .kt code");
+      });
+
+      // Quick Composable snippet inserters
+      function insertComposableCallToFigma(newFigmaChild, label) {
+        if (!currentFigmaRoot) return;
+        const target = findFigmaNodeById(currentFigmaRoot, selectedFigmaNodeId);
+        const container = (target && target.type === "FRAME") ? target : currentFigmaRoot;
+        container.children = container.children || [];
+        container.children.push(newFigmaChild);
+        selectedFigmaNodeId = newFigmaChild.id;
+        compileFigmaToCompose();
+        selectNode(newFigmaChild.id);
+        showToast(`Inserted ${label} → Updated AST & Compose code`);
+      }
+
+      document.getElementById("btnInsertText").addEventListener("click", () => {
+        insertComposableCallToFigma({
+          id: getNextMaxFigmaId(currentFigmaRoot),
+          name: "Text_NewLabel",
+          type: "TEXT",
+          characters: "New AST LabelNode",
+          fills: [{ type: "SOLID", visible: true, color: cssHexToFigmaColor("#334155") }],
+          style: { fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeightPx: 20 }
+        }, "Text() Composable");
+      });
+
+      document.getElementById("btnInsertButton").addEventListener("click", () => {
+        const btnId = getNextMaxFigmaId(currentFigmaRoot);
+        insertComposableCallToFigma({
+          id: btnId,
+          name: "Button_Action",
+          composableType: "Button",
+          type: "FRAME",
+          layoutMode: "HORIZONTAL",
+          primaryAxisAlignItems: "CENTER",
+          counterAxisAlignItems: "CENTER",
+          layoutSizingHorizontal: "FILL",
+          paddingTop: 12, paddingRight: 16, paddingBottom: 12, paddingLeft: 16,
+          itemSpacing: 8,
+          cornerRadius: 12,
+          fills: [{ type: "SOLID", visible: true, color: cssHexToFigmaColor("#4f46e5") }],
+          strokes: [],
+          strokeWeight: 0,
+          children: [{
+            id: btnId + "_txt",
+            name: "Text_Action",
+            type: "TEXT",
+            characters: "Confirm Action",
+            fills: [{ type: "SOLID", visible: true, color: cssHexToFigmaColor("#ffffff") }],
+            style: { fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeightPx: 20 }
+          }]
+        }, "Button() Composable");
+      });
+
+      document.getElementById("btnInsertRow").addEventListener("click", () => {
+        const rowId = getNextMaxFigmaId(currentFigmaRoot);
+        insertComposableCallToFigma({
+          id: rowId,
+          name: "Row_BadgeGroup",
+          type: "FRAME",
+          layoutMode: "HORIZONTAL",
+          primaryAxisAlignItems: "SPACE_BETWEEN",
+          counterAxisAlignItems: "CENTER",
+          layoutSizingHorizontal: "FILL",
+          paddingTop: 10, paddingRight: 12, paddingBottom: 10, paddingLeft: 12,
+          itemSpacing: 8,
+          cornerRadius: 8,
+          fills: [{ type: "SOLID", visible: true, color: cssHexToFigmaColor("#f1f5f9") }],
+          strokes: [],
+          strokeWeight: 0,
+          children: [
+            {
+              id: rowId + "_1",
+              name: "Text_Left",
+              type: "TEXT",
+              characters: "Status Token",
+              fills: [{ type: "SOLID", visible: true, color: cssHexToFigmaColor("#0f172a") }],
+              style: { fontFamily: "Inter", fontWeight: 600, fontSize: 12, lineHeightPx: 16 }
+            },
+            {
+              id: rowId + "_2",
+              name: "Text_Right",
+              type: "TEXT",
+              characters: "Verified",
+              fills: [{ type: "SOLID", visible: true, color: cssHexToFigmaColor("#059669") }],
+              style: { fontFamily: "Inter", fontWeight: 700, fontSize: 12, lineHeightPx: 16 }
+            }
+          ]
+        }, "Row() Composable");
+      });
+
+      document.getElementById("btnInsertDivider").addEventListener("click", () => {
+        insertComposableCallToFigma({
+          id: getNextMaxFigmaId(currentFigmaRoot),
+          name: "HorizontalDivider",
+          type: "RECTANGLE",
+          layoutSizingHorizontal: "FILL",
+          layoutSizingVertical: "FIXED",
+          fills: [{ type: "SOLID", visible: true, color: cssHexToFigmaColor("#e2e8f0") }],
+          absoluteBoundingBox: { x: 0, y: 0, width: 300, height: 1 },
+          children: []
+        }, "HorizontalDivider()");
+      });
+
+      // Right-pane visual add buttons (mirroring Figma layer insertion)
+      document.getElementById("btnAddFigmaText").addEventListener("click", () => {
+        document.getElementById("btnInsertText").click();
+      });
+      document.getElementById("btnAddFigmaButton").addEventListener("click", () => {
+        document.getElementById("btnInsertButton").click();
+      });
+      document.getElementById("btnAddFigmaRowCard").addEventListener("click", () => {
+        document.getElementById("btnInsertRow").click();
+      });
+
+      // Center Tabs
+      document.getElementById("tabBtnAst").addEventListener("click", () => switchCenterTab("Ast"));
+      document.getElementById("tabBtnFigmaJson").addEventListener("click", () => switchCenterTab("FigmaJson"));
+      document.getElementById("tabBtnTokens").addEventListener("click", () => switchCenterTab("Tokens"));
+      document.getElementById("tabBtnJvmSource").addEventListener("click", () => switchCenterTab("JvmSource"));
+
+      document.getElementById("btnExpandAllAst").addEventListener("click", () => {
+        if (currentFigmaRoot) selectNode(currentFigmaRoot.id);
+      });
+
+      // Figma JSON tab actions
+      document.getElementById("btnApplyFigmaJson").addEventListener("click", () => {
+        try {
+          const parsed = JSON.parse(document.getElementById("figmaJsonEditor").value);
+          currentFigmaRoot = parsed;
+          compileFigmaToCompose();
+          showToast("Applied Figma SceneNode JSON → Emitted Jetpack Compose .kt");
+        } catch (err) {
+          showToast(`Invalid Figma JSON: ${err.message}`);
+        }
+      });
+
+      document.getElementById("btnCopyFigmaJson").addEventListener("click", () => {
+        copyTextToClipboard(document.getElementById("figmaJsonEditor").value, "Figma SceneNode JSON");
+      });
+
+      // Token filter
+      document.getElementById("tokenSearchInput").addEventListener("input", () => {
+        renderLexerTokens();
+      });
+
+      // JVM file viewer
+      document.getElementById("jvmFileSelect").addEventListener("change", (e) => {
+        const key = e.target.value;
+        document.getElementById("jvmSourceCodeView").textContent = JVM_FILES[key] || "";
+      });
+
+      document.getElementById("btnCopyJvmFile").addEventListener("click", () => {
+        copyTextToClipboard(document.getElementById("jvmSourceCodeView").textContent, "Kotlin JVM Source File");
+      });
+
+      function updateDeviceViewportWidth() {
+        const effWidth = isLandscape ? Math.min(deviceWidthDp + 140, 620) : deviceWidthDp;
+        const canvasEl = document.getElementById("figmaVisualCanvas");
+        const headerEl = document.getElementById("figmaRootFrameLabel").parentElement;
+        canvasEl.style.maxWidth = `${effWidth}px`;
+        headerEl.style.maxWidth = `${effWidth}px`;
+        renderFigmaCanvas();
+      }
+
+      document.getElementById("deviceSizeSelect").addEventListener("change", (e) => {
+        deviceWidthDp = parseInt(e.target.value, 10) || 340;
+        updateDeviceViewportWidth();
+        showToast(`Viewport WindowSizeClass width: ${deviceWidthDp}dp`);
+      });
+
+      document.getElementById("btnRotateScreen").addEventListener("click", (e) => {
+        isLandscape = !isLandscape;
+        e.target.textContent = isLandscape ? "↻ Landscape" : "↻ Portrait";
+        updateDeviceViewportWidth();
+        showToast(`Switched viewport orientation to ${isLandscape ? "Landscape" : "Portrait"}`);
+      });
+
+      // Layout guides toggle
+      document.getElementById("btnToggleLayoutGuides").addEventListener("click", (e) => {
+        showLayoutGuides = !showLayoutGuides;
+        e.target.textContent = `Guides: ${showLayoutGuides ? "ON" : "OFF"}`;
+        renderFigmaCanvas();
+      });
+
+      // Inspector color picker sync
+      document.getElementById("inspColorPicker").addEventListener("input", (e) => {
+        document.getElementById("inspColorInput").value = e.target.value;
+        if (autoSyncEnabled) applyInspectorChanges();
+      });
+
+      document.getElementById(" btnApplyInspector" ? "btnApplyInspector" : "btnApplyInspector").addEventListener("click", () => {
+        applyInspectorChanges();
+      });
+
+      ["inspTextInput", "inspLayoutMode", "inspColorInput", "inspPaddingInput", "inspMetricInput", "inspRadiusInput", "inspWeightSelect", "inspRotationInput", "inspScrollSelect"].forEach(id => {
+        document.getElementById(id).addEventListener("change", () => {
+          if (autoSyncEnabled) applyInspectorChanges();
+        });
+      });
+
+      // Delete Figma Node
+      document.getElementById("btnDeleteFigmaNode").addEventListener("click", () => {
+        if (!currentFigmaRoot || selectedFigmaNodeId === currentFigmaRoot.id) {
+          showToast("Cannot delete the root @Composable frame");
+          return;
+        }
+        if (deleteFigmaNodeById(currentFigmaRoot, selectedFigmaNodeId)) {
+          selectedFigmaNodeId = currentFigmaRoot.id;
+          compileFigmaToCompose();
+          selectNode(currentFigmaRoot.id);
+          showToast("Deleted Figma node → Re-emitted Jetpack Compose code");
+        }
+      });
+
+      // Guide Modal listeners
+      const guideModal = document.getElementById("guideModalBackdrop");
+      document.getElementById("btnOpenGuideModal").addEventListener("click", () => {
+        guideModal.classList.remove("hidden");
+      });
+      document.getElementById("btnCloseGuideModal").addEventListener("click", () => {
+        guideModal.classList.add("hidden");
+      });
+      guideModal.addEventListener("click", (e) => {
+        if (e.target === guideModal) guideModal.classList.add("hidden");
+      });
+
+      document.getElementById("btnGuideDemoRotate").addEventListener("click", () => {
+        guideModal.classList.add("hidden");
+        document.getElementById("inspRotationInput").value = 6;
+        applyInspectorChanges();
+      });
+      document.getElementById("btnGuideDemoScroll").addEventListener("click", () => {
+        guideModal.classList.add("hidden");
+        if (currentFigmaRoot) selectNode(currentFigmaRoot.id);
+        document.getElementById("inspScrollSelect").value = "VERTICAL_SCROLLING";
+        applyInspectorChanges();
+      });
+      document.getElementById("btnGuideDemoExpanded").addEventListener("click", () => {
+        guideModal.classList.add("hidden");
+        const sel = document.getElementById("deviceSizeSelect");
+        sel.value = "560";
+        sel.dispatchEvent(new Event("change"));
+      });
+
+      // Initial compile
+      compileComposeToFigma();
+    });
+  </script>
+</body>
+</html>
