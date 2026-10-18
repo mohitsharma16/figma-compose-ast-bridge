@@ -1,7 +1,7 @@
 # Project exclude paths
-/.gradle/
-/build/
-/build/classes/
+.gradle/
+build/
+
 .kotlin/
 
 # IDE
@@ -27,3 +27,7 @@ build/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Node / Vite
+node_modules/
+dist/

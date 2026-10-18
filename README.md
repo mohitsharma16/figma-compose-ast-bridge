@@ -25,22 +25,24 @@ A deterministic **Kotlin PSI / AST compiler** and **Minimalist Multi-Device Reac
 ```text
 figma-compose-ast-bridge/
 ├── README.md                          # Complete project overview & setup handbook
-├── build.gradle.kts                   # Standalone Kotlin JVM CLI build script
-├── settings.gradle.kts                # Gradle settings
 ├── docs/
 │   ├── USER_GUIDE.md                  # Step-by-step web studio & Figma import guide
 │   ├── ARCHITECTURE.md                # Kotlin Lexer, Recursive-Descent AST & Auto Layout solver
 │   └── DEPLOYMENT.md                  # Free hosting on Cloudflare Pages & GitHub Pages
-├── src/                               # Standalone Kotlin JVM CLI Compiler (kotlin-cli)
-│   ├── main/kotlin/com/figmacompose/ast/
-│   │   ├── Main.kt
-│   │   ├── model/AstAndFigmaModels.kt
-│   │   ├── parser/KotlinComposeAstParser.kt
-│   │   └── transformer/
-│   │       ├── AstToFigmaTransformer.kt
-│   │       └── FigmaToAstTransformer.kt
-│   └── test/kotlin/com/figmacompose/ast/
-│       └── RoundTripAstTest.kt
+├── kotlin-cli/                        # Standalone Kotlin JVM CLI Compiler
+│   ├── build.gradle.kts               # Gradle build script
+│   ├── settings.gradle.kts            # Gradle settings
+│   ├── gradle/                        # Gradle wrapper / daemon config
+│   └── src/
+│       ├── main/kotlin/com/figmacompose/ast/
+│       │   ├── Main.kt
+│       │   ├── model/AstAndFigmaModels.kt
+│       │   ├── parser/KotlinComposeAstParser.kt
+│       │   └── transformer/
+│       │       ├── AstToFigmaTransformer.kt
+│       │       └── FigmaToAstTransformer.kt
+│       └── test/kotlin/com/figmacompose/ast/
+│           └── RoundTripAstTest.kt
 └── web/                               # Modular React 18 + Vite + Tailwind CSS Studio
     ├── package.json
     ├── vite.config.js
@@ -69,6 +71,8 @@ Open `http://localhost:5173` in your browser.
 ### 2. Run the Standalone Kotlin CLI Compiler
 Requires JDK 17+ and Gradle 8+:
 ```bash
+cd kotlin-cli
+
 # Convert Jetpack Compose (.kt) -> Figma JSON
 ./gradlew run --args="compose2figma samples/WalletScreen.kt build/figma_nodes.json"
 
