@@ -1,4 +1,4 @@
-name: Deploy KtAstBridge Studio to GitHub Pages
+name: Build & Deploy React Studio to GitHub Pages
 
 on:
   push:
@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build-and-deploy:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -23,12 +23,21 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies & build Vite React app
+        working-directory: ./web
+        run: |
+          npm install
+          npm run build
       - name: Setup Pages
         uses: actions/configure-pages@v5
-      - name: Upload static studio artifact (docs/)
+      - name: Upload Vite dist artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: "./docs"
+          path: './web/dist'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
